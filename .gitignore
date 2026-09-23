@@ -1,0 +1,11 @@
+# Mouse Click Counter build output
+dist/
+*.exe
+*.pdb
+*.user
+.vs/
+bin/
+obj/
+
+# Local runtime copies (if someone runs beside the repo)
+*.tmp
