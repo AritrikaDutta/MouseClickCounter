@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GLS Mining AI Reference Architecture — v0.9 Validation Draft</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#f7f6f3;
+  --surface:#ffffff;
+  --ink:#1a1a18;
+  --ink-2:#4a4a46;
+  --ink-3:#8a8a84;
+  --rule:#e0ddd6;
+  --rule-mid:#ccc9c0;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Inter',system-ui,sans-serif;
+
+  --coral-bg:#fdecea; --coral-bd:#d4765a; --coral-t:#8c3c24; --coral-h:#4e1e0e;
+  --teal-bg:#e2f4ec;  --teal-bd:#3da070;  --teal-t:#1b6644;  --teal-h:#0a3824;
+  --amber-bg:#fdf2dc; --amber-bd:#c99830; --amber-t:#7a5c14; --amber-h:#42300a;
+  --slate-bg:#eeecf0; --slate-bd:#8880b0; --slate-t:#3e3870; --slate-h:#1e1a40;
+  --blue-bg:#e6eff9;  --blue-bd:#4a7ecc;  --blue-t:#1e3e7e;  --blue-h:#0c1e4a;
+  --stone-bg:#f0eeea; --stone-bd:#b0ada4; --stone-t:#5a5850; --stone-h:#2c2b28;
+  --green-bg:#e6f2da; --green-bd:#5a9c2c; --green-t:#2c5e10; --green-h:#163006;
+
+  --st-confirm:#3da070;
+  --st-revise:#c99830;
+  --st-reject:#d4765a;
+  --st-unknown:#8a8a84;
+}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.55;padding:36px 36px 80px}
+
+/* ── presentation controls ── */
+.ctrl-bar{position:fixed;top:12px;right:12px;z-index:900;display:flex;gap:6px;align-items:center;background:var(--surface);border:1px solid var(--rule-mid);border-radius:8px;padding:6px 8px;box-shadow:0 2px 12px rgba(0,0,0,.08);flex-wrap:wrap;max-width:calc(100vw - 24px)}
+.cb-btn{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--rule-mid);background:var(--bg);color:var(--ink-2);border-radius:5px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.cb-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.cb-btn.on{background:var(--slate-bg);border-color:var(--slate-bd);color:var(--slate-h);font-weight:600}
+.cb-sep{width:1px;height:18px;background:var(--rule)}
+
+/* present mode: hide validation machinery */
+body.present .val{display:none}
+body.present .tracker{display:none}
+body.present .instr{display:none}
+body.present .card{cursor:zoom-in;transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .25s}
+body.present .card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(26,26,24,.12)}
+
+/* entrance cascade when present mode begins */
+@keyframes cascadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+body.present.cascading .layer{animation:cascadeIn .5s cubic-bezier(.2,.7,.3,1) both}
+body.present.cascading .layer:nth-of-type(1){animation-delay:.05s}
+body.present.cascading .layer:nth-of-type(2){animation-delay:.13s}
+body.present.cascading .layer:nth-of-type(3){animation-delay:.21s}
+body.present.cascading .layer:nth-of-type(4){animation-delay:.29s}
+body.present.cascading .layer:nth-of-type(5){animation-delay:.37s}
+body.present.cascading .layer:nth-of-type(6){animation-delay:.45s}
+
+/* spotlight overlay — FLIP shared-element */
+.spot-overlay{position:fixed;inset:0;background:rgba(26,26,24,0);z-index:950;display:none;backdrop-filter:blur(0px);transition:background .35s,backdrop-filter .35s}
+.spot-overlay.open{display:block}
+.spot-overlay.lit{background:rgba(26,26,24,.55);backdrop-filter:blur(3px)}
+.spot-card{position:fixed;background:var(--surface);border-radius:14px;padding:34px 38px;box-shadow:0 16px 60px rgba(0,0,0,.3);border-top:6px solid var(--slate-bd);overflow-y:auto;transform-origin:top left;transition:transform .42s cubic-bezier(.3,.8,.3,1),opacity .2s}
+.spot-h{font-size:26px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+.spot-tags{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+.spot-tags span{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:4px;border:1px solid var(--rule-mid);color:var(--ink-2)}
+.spot-b{font-size:17px;line-height:1.8;color:var(--ink-2)}
+.spot-why{margin-top:22px;border-top:1px solid var(--rule);padding-top:16px}
+.spot-why-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+.spot-p{display:flex;gap:10px;margin-bottom:10px;font-size:13.5px;line-height:1.65;color:var(--ink-2)}
+.spot-p b{font-family:var(--mono);font-size:11px;color:var(--slate-t);background:var(--slate-bg);border:1px solid var(--slate-bd);border-radius:4px;padding:2px 7px;height:fit-content;white-space:nowrap}
+.spot-hint{margin-top:20px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+
+/* walkthrough mode */
+body.walk .layer,body.walk .feedback,body.walk .oq,body.walk .legend{opacity:.12;transition:opacity .4s,transform .4s;pointer-events:none}
+body.walk .layer.walk-active{opacity:1;pointer-events:auto;transform:scale(1.008)}
+body.walk .conn{opacity:.12;transition:opacity .4s}
+.walk-pos{display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:900;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:11px;letter-spacing:.06em;border-radius:20px;padding:8px 18px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+body.walk .walk-pos{display:block}
+.walk-rail{display:none;position:fixed;top:0;left:0;height:3px;background:var(--slate-bd);z-index:960;transition:width .4s cubic-bezier(.2,.7,.3,1)}
+body.walk .walk-rail{display:block}
+
+/* tag filters */
+body.f-dim .card{opacity:.14;transition:opacity .35s}
+body.f-dim .card.f-hit{opacity:1}
+.f-count{font-family:var(--mono);font-size:10px;color:var(--slate-t);background:var(--slate-bg);border:1px solid var(--slate-bd);border-radius:10px;padding:2px 8px;display:none}
+.f-count.show{display:inline-block}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+@media print{.ctrl-bar,.walk-pos,.walk-rail,.spot-overlay{display:none!important}}
+
+/* ── header ── */
+.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--rule);padding-bottom:16px;margin-bottom:10px}
+.hd-title{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.hd-sub{font-size:12px;color:var(--ink-3);margin-top:3px}
+.hd-badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber-t);background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:4px;padding:4px 10px;white-space:nowrap}
+
+/* ── instructions bar ── */
+.instr{display:flex;gap:16px;align-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:10px 16px;margin-bottom:24px;flex-wrap:wrap}
+.instr-label{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.instr-item{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2)}
+.st-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ── layer wrapper ── */
+.layer{margin-bottom:8px}
+.layer-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px;padding-left:2px;display:flex;justify-content:space-between;align-items:baseline}
+.layer-hint{font-size:10px;color:var(--ink-3);text-transform:none;letter-spacing:0;font-family:var(--sans);font-style:italic}
+.layer-inner{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px}
+.conn{display:flex;justify-content:center;align-items:center;height:22px;color:var(--rule-mid);font-size:15px}
+.conn-label{font-size:10px;font-family:var(--mono);color:var(--ink-3);background:var(--bg);padding:0 8px}
+
+.row{display:flex;gap:8px;align-items:stretch}
+
+/* ── component card ── */
+.card{border-radius:7px;border:1px solid var(--rule);padding:10px 12px;background:var(--stone-bg);flex:1;min-width:0;position:relative}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px}
+.card-h{font-size:12px;font-weight:600;color:var(--stone-h)}
+.card-b{font-size:10.5px;color:var(--stone-t);line-height:1.6}
+.conf-tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.04em;padding:2px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.conf-C{background:var(--teal-bg);color:var(--teal-t);border:1px solid var(--teal-bd)}
+.conf-I{background:var(--amber-bg);color:var(--amber-t);border:1px solid var(--amber-bd)}
+.conf-U{background:var(--coral-bg);color:var(--coral-t);border:1px solid var(--coral-bd)}
+.p-tag{font-family:var(--mono);font-size:8.5px;padding:2px 5px;border-radius:3px;background:#fff;color:var(--ink-3);border:1px solid var(--rule-mid);margin-right:3px;white-space:nowrap;flex-shrink:0}
+.ka{font-family:var(--mono);font-size:8.5px;padding:2px 6px;border-radius:3px;margin-right:3px;white-space:nowrap;flex-shrink:0;font-weight:600}
+.ka-keep{background:var(--green-bg);color:var(--green-t);border:1px solid var(--green-bd)}
+.ka-add{background:var(--blue-bg);color:var(--blue-t);border:1px solid var(--blue-bd)}
+.ka-fix{background:var(--amber-bg);color:var(--amber-t);border:1px solid var(--amber-bd)}
+b.ka-keep,b.ka-add,b.ka-fix{padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:9px}
+
+/* color variants */
+.coral{background:var(--coral-bg);border-color:var(--coral-bd)} .coral .card-h{color:var(--coral-h)} .coral .card-b{color:var(--coral-t)}
+.teal{background:var(--teal-bg);border-color:var(--teal-bd)} .teal .card-h{color:var(--teal-h)} .teal .card-b{color:var(--teal-t)}
+.amber{background:var(--amber-bg);border-color:var(--amber-bd)} .amber .card-h{color:var(--amber-h)} .amber .card-b{color:var(--amber-t)}
+.slate{background:var(--slate-bg);border-color:var(--slate-bd)} .slate .card-h{color:var(--slate-h)} .slate .card-b{color:var(--slate-t)}
+.blue{background:var(--blue-bg);border-color:var(--blue-bd)} .blue .card-h{color:var(--blue-h)} .blue .card-b{color:var(--blue-t)}
+.green{background:var(--green-bg);border-color:var(--green-bd)} .green .card-h{color:var(--green-h)} .green .card-b{color:var(--green-t)}
+
+/* ── validation controls ── */
+.val{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,.12)}
+.val-btns{display:flex;gap:4px;margin-bottom:6px}
+.vb{flex:1;font-family:var(--mono);font-size:9px;padding:3px 2px;border-radius:4px;border:1px solid var(--rule-mid);background:#fff;color:var(--ink-3);cursor:pointer;text-align:center;transition:all .12s;white-space:nowrap}
+.vb:hover{border-color:var(--ink-3)}
+.vb.on-confirm{background:var(--st-confirm);border-color:var(--st-confirm);color:#fff}
+.vb.on-revise{background:var(--st-revise);border-color:var(--st-revise);color:#fff}
+.vb.on-reject{background:var(--st-reject);border-color:var(--st-reject);color:#fff}
+.val-note{width:100%;font-family:var(--sans);font-size:10.5px;padding:5px 8px;border:1px solid var(--rule);border-radius:4px;background:#fff;color:var(--ink);resize:vertical;min-height:26px;display:none}
+.val-note.show{display:block}
+.val-note::placeholder{color:var(--ink-3)}
+
+/* ── medallion + split ── */
+.med-arrow{display:flex;align-items:center;color:var(--rule-mid);font-size:15px;flex-shrink:0;padding:0 2px}
+.split-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
+.split-label{font-size:10px;font-family:var(--mono);margin-bottom:5px;letter-spacing:.06em}
+.split-inner{background:var(--surface);border:1px solid;border-radius:10px;padding:12px}
+
+/* ── feedback band ── */
+.feedback{border:1px dashed var(--stone-bd);border-radius:8px;background:var(--stone-bg);padding:10px 14px;display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.fb-icon{font-size:16px;color:var(--ink-3);flex-shrink:0}
+.fb-text{font-size:11px;color:var(--stone-t);line-height:1.6;flex:1}
+.fb-text b{color:var(--stone-h)}
+
+/* ── crosscut ── */
+.crosscut{border:1px dashed var(--rule-mid);border-radius:10px;padding:12px 14px;background:var(--stone-bg);margin-bottom:8px}
+.cc-title{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--stone-h);margin-bottom:8px}
+.cc-pills{display:flex;flex-wrap:wrap;gap:5px}
+.cc-pill{font-size:10px;color:var(--stone-t);background:#fff;border:1px solid var(--stone-bd);border-radius:4px;padding:3px 8px}
+
+/* ── open questions ── */
+.oq{background:var(--surface);border:1px solid var(--coral-bd);border-radius:10px;padding:14px 16px;margin-top:24px}
+.oq-title{font-size:13px;font-weight:700;color:var(--coral-h);margin-bottom:10px}
+.oq-item{display:flex;gap:8px;font-size:11.5px;color:var(--ink-2);margin-bottom:7px;line-height:1.55}
+.oq-num{font-family:var(--mono);font-size:10px;color:var(--coral-t);flex-shrink:0;padding-top:1px}
+
+/* ── tracker ── */
+.tracker{position:fixed;bottom:18px;right:18px;background:var(--surface);border:1px solid var(--rule-mid);border-radius:10px;padding:12px 16px;min-width:170px;box-shadow:0 4px 18px rgba(0,0,0,.10);z-index:10}
+.tr-title{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.tr-row{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-2);margin-bottom:3px}
+.tr-count{font-family:var(--mono);font-weight:600}
+
+/* ── legend ── */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:28px;padding-top:14px;border-top:1px solid var(--rule)}
+.lg{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink-3)}
+.lg-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid;flex-shrink:0}
+
+@media print{
+  .tracker{display:none}
+  .val-note{display:block;border-style:dashed}
+  body{padding:10px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ PRESENTATION CONTROLS ══ -->
+<div class="ctrl-bar">
+  <button class="cb-btn" id="btnMode" onclick="toggleMode()" title="Hide/show validation controls">◉ Validate</button>
+  <button class="cb-btn" id="btnWalk" onclick="toggleWalk()" title="Layer-by-layer walkthrough — arrow keys to step">▸ Walkthrough</button>
+  <button class="cb-btn" id="btnFull" onclick="toggleFull()" title="Fullscreen">⛶ Fullscreen</button>
+  <div class="cb-sep"></div>
+  <button class="cb-btn f-btn" data-f="ka-keep" onclick="toggleFilter(this)">KEEP</button>
+  <button class="cb-btn f-btn" data-f="ka-add" onclick="toggleFilter(this)">ADD</button>
+  <button class="cb-btn f-btn" data-f="ka-fix" onclick="toggleFilter(this)">FIX</button>
+  <button class="cb-btn f-btn" data-f="conf-U" onclick="toggleFilter(this)">UNKN</button>
+  <span class="f-count" id="fCount"></span>
+</div>
+
+<div class="walk-rail" id="walkRail"></div>
+
+<!-- ══ SPOTLIGHT OVERLAY ══ -->
+<div class="spot-overlay" id="spotOverlay" onclick="closeSpot(event)">
+  <div class="spot-card" id="spotCard"></div>
+</div>
+
+<!-- ══ WALKTHROUGH POSITION ══ -->
+<div class="walk-pos" id="walkPos"></div>
+
+
+<div class="hd">
+  <div>
+    <div class="hd-title">GLS Mining AI Reference Architecture</div>
+    <div class="hd-sub">Copper &amp; gold processing operations · pit to port · validated against two SE Asian production environments</div>
+  </div>
+  <div class="hd-badge">v1.0 draft — Validation Copy</div>
+</div>
+
+<div class="instr">
+  <span class="instr-label">Validation pass — for each component:</span>
+  <span class="instr-item"><span class="st-dot" style="background:var(--st-confirm)"></span>Confirm — ran in production as described</span>
+  <span class="instr-item"><span class="st-dot" style="background:var(--st-revise)"></span>Revise — existed, but differently (note how)</span>
+  <span class="instr-item"><span class="st-dot" style="background:var(--st-reject)"></span>Reject — never existed / wrong (note what instead)</span>
+  <span class="instr-item" style="margin-left:auto;color:var(--ink-3)">Tags: <b style="color:var(--teal-t)">CONF</b>/<b style="color:var(--amber-t)">INFR</b>/<b style="color:var(--coral-t)">UNKN</b> = evidence · <b class="ka-keep">KEEP</b> client-side exists · <b class="ka-add">ADD</b> GLS builds · <b class="ka-fix">FIX</b> surgical repair</span>
+</div>
+
+<!-- ══ SECTION 0: PROBLEM STATEMENTS ══ -->
+<div class="layer">
+  <div class="layer-label"><span>Section 0 — the problems this architecture exists to solve</span><span class="layer-hint">Validate these FIRST — every box below must answer to one of them</span></div>
+  <div class="layer-inner" style="border-color:var(--coral-bd)">
+
+    <!-- Market problem -->
+    <div class="card" style="background:#fff;border-color:var(--coral-bd);margin-bottom:10px" data-name="Market problem">
+      <div class="card-top"><div class="card-h" style="color:var(--coral-h);font-size:13px">The market problem</div><span class="conf-tag conf-I">INFR</span></div>
+      <div class="card-b" style="font-size:12px;color:var(--ink-2);line-height:1.7">
+        Mid-tier miners face AISC pressure from <b>declining head grade</b> — a geology and mine-planning trend outside operational control, meaning every tonne processed yields less metal than it used to. The one lever fully within the operation's control is <b>recovery</b>: how much of the metal already present in the ore actually gets captured, rather than lost in the process. Recovery is process-driven and addressable in real time — regardless of what grade the mine plan hands the plant on any given day.<br><br>
+        The data to optimize recovery already exists on-site: historian, dispatch, and lab systems that each do their own job well — but were never designed to talk to each other, feed decisions, or survive a cross-system audit. Meanwhile mandatory ESG and climate-disclosure regimes (ASIC in Australia, SEBI BRSR in India) now demand audit-grade data lineage these systems were never built to provide. <b>The gap is not sensors or software — it is the architecture between them.</b><br><br>
+        And even where data is unified, most mining AI deployments stall at the same point: recommendations sit in dashboards, and a busy operator must manually reconcile them against parts availability, dispatch schedules, and current plant state before acting — so adoption dies quietly. <b>Closing that gap requires more than pipes — it requires a system that reasons across the connected data and proposes a decision-ready action, with a human still holding the final call.</b>
+      </div>
+      <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Does this match what actually drove investment at both operations? Real trigger — grade, cost, board mandate, consultant push? [GLS to-do: verify current SEBI BRSR Core assurance thresholds before client use]"></textarea></div>
+    </div>
+
+    <!-- Engineering problems -->
+    <div class="card" style="background:#fff;border-color:var(--slate-bd)" data-name="Engineering problems">
+      <div class="card-top"><div class="card-h" style="color:var(--slate-h);font-size:13px">The engineering problem — six requirements the architecture must satisfy</div><span class="conf-tag conf-I">INFR</span></div>
+      <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.75">
+        <b>P1 · Fusion</b> — combine OT sensor streams, lab assays, and mine-planning data into one decision-grade pipeline (different cadences, owners, and formats).<br>
+        <b>P2 · Sensor reality</b> — survive real-world sensor failure (dropouts, stuck values, recalibration shifts) without silently poisoning models.<br>
+        <b>P3 · Parity</b> — guarantee that features computed at training time are identical to features computed at inference time (no training-serving skew).<br>
+        <b>P4 · Last mile</b> — deliver recommendations to operators inside their workflow, and capture their accept/override/reject response.<br>
+        <b>P5 · Traceability</b> — make every reported metric traceable to its source readings, at audit/ESG grade.<br>
+        <b>P6 · Sustainability</b> — run with a small team, at a platform cost a mid-tier operator will accept.<br>
+        <b>P7 · Agent scope</b> — constrain what an agentic system may autonomously query versus act on; every action inside an explicit, auditable permission boundary, with the human gate (P4) as a hard stop before anything touches the physical plant.
+      </div>
+      <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Are these the six problems you actually fought in production? What's missing? Which one consumed the most time? Rank them by pain."></textarea></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="conn"><span class="conn-label">every component below must trace to P1–P7 — if it solves none of them, it gets cut</span></div>
+
+<div class="feedback" style="border-color:var(--blue-bd);background:var(--blue-bg)">
+  <div class="fb-icon" style="color:var(--blue-t)">◧</div>
+  <div class="fb-text" style="color:var(--blue-t)"><b style="color:var(--blue-h)">How to read this document</b> — this is a reference architecture: the complete target state, validated against two production operations. No client needs all of it; no client has none of it. Each component is tagged <b class="ka-keep">KEEP</b> (client-side systems that stay and become sources), <b class="ka-add">ADD</b> (the connecting layer GLS builds), or <b class="ka-fix">FIX</b> (surgical repair of what exists). Client engagements map current state against this yardstick — mature verticals, broken horizontals — and buy only the gap.</div>
+</div>
+
+<!-- ══ L0 SOURCES ══ -->
+<div class="layer">
+  <div class="layer-label"><span>Layer 0 — source systems</span><span class="layer-hint">All client-side, all KEEP — mature verticals we build on, never replace</span></div>
+  <div class="layer-inner">
+    <div class="row">
+      <div class="card coral" style="flex:1.5" data-name="OT sensors">
+        <div class="card-top"><div class="card-h">700+ OT sensors</div><span class="ka ka-keep">KEEP</span><span class="p-tag">P1</span><span class="conf-tag conf-C">CONF</span></div>
+        <div class="card-b">SAG mills · flotation cells · haul trucks · crushers. Mill power, bearing pressure, froth level, pH. Cadence 1 Hz – 1 min (varies by class).</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Actual sensor count? Cadence by class? Which tags mattered most?"></textarea></div>
+      </div>
+      <div class="card coral" data-name="SCADA/DCS + historian">
+        <div class="card-top"><div class="card-h">SCADA / DCS + historian</div><span class="ka ka-keep">KEEP</span><span class="p-tag">P1</span><span class="p-tag">P2</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Process control layer. Historian (OSIsoft PI or similar?) assumed as OT/IT bridge and buffer.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Which historian? Who owned the tag register?"></textarea></div>
+      </div>
+      <div class="card" data-name="ERP">
+        <div class="card-top"><div class="card-h">ERP (SAP-class)</div><span class="ka ka-keep">KEEP</span><span class="p-tag">P1</span><span class="conf-tag conf-C">CONF</span></div>
+        <div class="card-b">Materials, production planning, procurement. Nightly batch assumed.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="CDC or batch? Latency? Which modules fed analytics?"></textarea></div>
+      </div>
+      <div class="card" data-name="Geology">
+        <div class="card-top"><div class="card-h">Mine planning / geology</div><span class="ka ka-keep">KEEP</span><span class="p-tag">P1</span><span class="conf-tag conf-C">CONF</span></div>
+        <div class="card-b">Block models, drill data, ore grade forecasts (Surpac-class). Batch, days-to-weeks cadence.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="How did geology data reach the models — manual, ETL, API?"></textarea></div>
+      </div>
+      <div class="card" data-name="Environmental">
+        <div class="card-top"><div class="card-h">UAV / satellite / lab</div><span class="ka ka-keep">KEEP</span><span class="p-tag">P1</span><span class="p-tag">P5</span><span class="conf-tag conf-C">CONF</span></div>
+        <div class="card-b">NDVI reclamation imagery, water/tailings monitoring, lab assays (ore hardness).</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="How did lab assay data flow in? Frequency?"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="conn">↓</div>
+
+<!-- ══ L1 INGESTION ══ -->
+<div class="layer">
+  <div class="layer-label"><span>Layer 1 — ingestion</span><span class="layer-hint">Two lanes: streaming for sensors, batch for enterprise systems</span></div>
+  <div class="layer-inner">
+    <div class="row">
+      <div class="card teal" style="flex:1.4" data-name="Streaming ingest">
+        <div class="card-top"><div class="card-h">Streaming — Kafka / Event Hubs</div><span class="ka ka-add">ADD</span><span class="p-tag">P1</span><span class="p-tag">P2</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">Real-time sensor telemetry · topic per asset · dead-letter queue · replay for retraining · exactly-once. <b>Or was it micro-batch / historian export?</b></div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="True streaming or micro-batch? End-to-end latency sensor→available?"></textarea></div>
+      </div>
+      <div class="card" data-name="Batch ingest">
+        <div class="card-top"><div class="card-h">Batch — ADF / Glue-class ETL</div><span class="ka ka-add">ADD</span><span class="p-tag">P1</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">ERP nightly extract · geology file ingestion · schema-on-read · SLA monitored (assumed).</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="What tool actually ran batch ETL? Was failure alerting real?"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="conn">↓</div>
+
+<!-- ══ L2 MEDALLION ══ -->
+<div class="layer">
+  <div class="layer-label"><span>Layer 2 — delta lakehouse (medallion)</span><span class="layer-hint">Trust escalation: raw → verified → certified</span></div>
+  <div class="layer-inner">
+    <div class="row" style="align-items:stretch">
+      <div class="card amber" data-name="Bronze">
+        <div class="card-top"><div class="card-h">Bronze — raw</div><span class="ka ka-add">ADD</span><span class="p-tag">P2</span><span class="p-tag">P5</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">Immutable · append-only · full fidelity · schema evolution via Delta · partitioned date + asset_id · retained indefinitely.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Delta or plain Parquet? Actual partitioning? Retention policy?"></textarea></div>
+      </div>
+      <div class="med-arrow">→</div>
+      <div class="card" data-name="Silver">
+        <div class="card-top"><div class="card-h">Silver — curated</div><span class="ka ka-add">ADD</span><span class="p-tag">P2</span><span class="p-tag">P3</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">Drift corrected · outlier clipping · gap fill (LOCF/interp) · aligned to process clock · quality flags persisted · completeness SLA.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Did Silver exist as a governed layer, or ad hoc cleaning per analyst? Null strategy?"></textarea></div>
+      </div>
+      <div class="med-arrow">→</div>
+      <div class="card teal" data-name="Gold">
+        <div class="card-top"><div class="card-h">Gold — analytical</div><span class="ka ka-add">ADD</span><span class="p-tag">P5</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">Recovery rate aggregates · shift KPI tables · cost-per-tonne · ESG certified metrics · pre-joined for BI · warehouse-served.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="One certified recovery-rate definition, or did teams disagree? Snowflake real?"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="conn"><span class="conn-label">Silver → Feature Store (DS path) · Gold → BI consumers (BI path)</span></div>
+
+<!-- ══ SPLIT ══ -->
+<div class="split-row">
+  <div>
+    <div class="split-label" style="color:var(--blue-t)">DS PATH — MODEL PIPELINE (reads Silver, not Gold)</div>
+    <div class="split-inner" style="border-color:var(--blue-bd)">
+      <div class="card blue" style="margin-bottom:8px" data-name="Feature Store">
+        <div class="card-top"><div class="card-h">Feature Store</div><span class="ka ka-add">ADD</span><span class="p-tag">P3</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Rolling windows (5 min / 1 hr / shift) · lag features · rate-of-change · cross-sensor ratios · soft-sensor outputs as features · point-in-time joins · online/offline parity.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Real Feature Store, or features recomputed per notebook? Training-serving skew incidents?"></textarea></div>
+      </div>
+      <div class="conn" style="height:16px">↓</div>
+      <div class="card slate" style="margin-bottom:8px" data-name="Model training">
+        <div class="card-top"><div class="card-h">Model training</div><span class="ka ka-add">ADD</span><span class="p-tag">P3</span><span class="conf-tag conf-C">CONF</span></div>
+        <div class="card-b">Recovery-optimisation model · mill-fill soft sensor · stockpile segregation model · predictive maintenance · versioned experiments · champion/challenger · ~3 yrs training data.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Which models were truly in production vs experimental? Top 3 predictive features? Retraining trigger?"></textarea></div>
+      </div>
+      <div class="conn" style="height:16px">↓</div>
+      <div class="card slate" data-name="Model serving">
+        <div class="card-top"><div class="card-h">Model serving + human gate</div><span class="ka ka-add">ADD</span><span class="p-tag">P4</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">Predicted recovery % · set-point recommendations with confidence intervals · operator approval gate (accept / override / reject) · drift monitoring · rollback triggers.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="How did recommendations physically reach operators? Was accept/reject logged? Drift monitoring real?"></textarea></div>
+      </div>
+      <div class="conn" style="height:16px">↓</div>
+      <div class="card blue" data-name="Agentic layer">
+        <div class="card-top"><div class="card-h">Agentic layer</div><span class="ka ka-add">ADD</span><span class="p-tag">P4</span><span class="p-tag">P7</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Reasons across Gold data + Feature Store + live ERP/dispatch state · assembles decision-ready actions (cause, context, parts availability, recommended step) — not raw predictions · autonomous scope limited to read/query · all write actions route through the human gate (P4). <b>Not derived from the reference operations — GLS forward capability, proposed.</b></div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Validate as concept, not experience: would operators at your sites have trusted this? What autonomous scope is realistic day one? Which cross-system lookups consumed operator time?"></textarea></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="split-label" style="color:var(--teal-t)">BI PATH — REPORTING CONSUMERS (reads Gold)</div>
+    <div class="split-inner" style="border-color:var(--teal-bd)">
+      <div class="card green" style="margin-bottom:8px" data-name="BI dashboards">
+        <div class="card-top"><div class="card-h">BI dashboards</div><span class="ka ka-fix">FIX</span><span class="p-tag">P5</span><span class="conf-tag conf-C">CONF</span></div>
+        <div class="card-b">Ops KPIs · shift reports · cost-per-tonne · fleet utilisation · management views (Power BI-class).</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Did BI read governed Gold tables or raw extracts?"></textarea></div>
+      </div>
+      <div class="card teal" style="margin-bottom:8px" data-name="ESG reporting">
+        <div class="card-top"><div class="card-h">ESG reporting</div><span class="ka ka-fix">FIX</span><span class="p-tag">P5</span><span class="conf-tag conf-I">INFR</span></div>
+        <div class="card-b">Certified metrics · investor reports · reclamation (NDVI) · water efficiency · CO₂ tracking · audit-ready lineage (assumed).</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Could an ESG number be traced to source? Was lineage real or manual?"></textarea></div>
+      </div>
+      <div class="card" data-name="Writeback and APIs">
+        <div class="card-top"><div class="card-h">ERP writeback + APIs</div><span class="ka ka-fix">FIX</span><span class="p-tag">P4</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Production actuals written back to ERP · external API consumers · alerting systems.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Did any writeback exist, or was ERP one-way?"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FEEDBACK ══ -->
+<div class="feedback">
+  <div class="fb-icon">↺</div>
+  <div class="fb-text"><b>Feedback loop</b> — operator accept/override/reject logged · actual vs predicted recovery captured · acceptance-rate drop or feature-distribution shift triggers retraining · actual outcomes aggregated into Gold KPI tables. <span style="color:var(--coral-t)">[UNKN — was this loop ever closed in production?]</span></div>
+  <div class="val" style="border:none;padding:0;margin:0;min-width:210px">
+    <div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div>
+    <textarea class="val-note" placeholder="Was operator feedback ever captured and used?"></textarea>
+  </div>
+</div>
+
+<!-- ══ GOVERNANCE ══ -->
+<div class="layer">
+  <div class="layer-label"><span>Governance — ambient, not sequential</span><span class="layer-hint">Wraps every layer above</span></div>
+  <div class="layer-inner">
+    <div class="row">
+      <div class="card slate" data-name="Catalog and lineage">
+        <div class="card-top"><div class="card-h">Catalog &amp; lineage</div><span class="ka ka-add">ADD</span><span class="p-tag">P5</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Unity Catalog-class: column-level lineage · RBAC by domain · classification · audit logs · certified data products.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Any catalog live? Could lineage be traced end-to-end?"></textarea></div>
+      </div>
+      <div class="card slate" data-name="Data quality">
+        <div class="card-top"><div class="card-h">Data quality</div><span class="ka ka-add">ADD</span><span class="p-tag">P2</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">DQ framework at Bronze→Silver boundary · sensor dropout detection · completeness SLA · DQ dashboard.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Would a stuck sensor (4 hrs same value) have been caught? By what?"></textarea></div>
+      </div>
+      <div class="card slate" data-name="Data contracts">
+        <div class="card-top"><div class="card-h">Data contracts</div><span class="ka ka-add">ADD</span><span class="p-tag">P6</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Schema agreements between domains · breaking-change alerts · consumer sign-off · ownership RACI.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Did schema changes ever break downstream silently?"></textarea></div>
+      </div>
+      <div class="card slate" data-name="Cost and ops">
+        <div class="card-top"><div class="card-h">Cost &amp; platform ops</div><span class="ka ka-fix">FIX</span><span class="p-tag">P6</span><span class="conf-tag conf-U">UNKN</span></div>
+        <div class="card-b">Cost allocation by domain · cluster auto-scaling · storage lifecycle tiers · on-call / runbooks · team structure.</div>
+        <div class="val"><div class="val-btns"><button class="vb" onclick="setV(this,'confirm')">✓ Confirm</button><button class="vb" onclick="setV(this,'revise')">~ Revise</button><button class="vb" onclick="setV(this,'reject')">✗ Reject</button></div><textarea class="val-note" placeholder="Team size DE vs DS? Who was on call? Biggest platform pain point?"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DATA MESH ══ -->
+<div class="crosscut">
+  <div class="cc-title">Data Mesh — domain ownership (validate: real, aspirational, or absent?)</div>
+  <div class="cc-pills">
+    <span class="cc-pill">⛏ Mining Operations — sensors · recovery models · shift KPIs</span>
+    <span class="cc-pill">🏭 Smelter / downstream — process QC · energy analytics</span>
+    <span class="cc-pill">🗺 Geology &amp; Planning — block models · grade forecasts</span>
+    <span class="cc-pill">🌿 ESG — reclamation · water · carbon · audit-grade lineage</span>
+    <span class="cc-pill">📦 Supply Chain — procurement · inventory · vendor SLA</span>
+    <span class="cc-pill">💹 Finance — consumer only · Gold aggregates</span>
+  </div>
+</div>
+
+<!-- ══ OPEN QUESTIONS ══ -->
+<div class="oq">
+  <div class="oq-title">Iteration 1 — priority questions (resolve these before anything else)</div>
+  <div class="oq-item"><span class="oq-num">Q1</span><div>Walk me through the exact path from a sensor value changing to it appearing somewhere queryable. Every hop, every system, worst-case latency.</div></div>
+  <div class="oq-item"><span class="oq-num">Q2</span><div>Was the Lakehouse / Medallion real in production, partially built, or aspirational? What did the layers actually contain?</div></div>
+  <div class="oq-item"><span class="oq-num">Q3</span><div>How did model recommendations physically reach operators — and was their response ever captured?</div></div>
+  <div class="oq-item"><span class="oq-num">Q4</span><div>What were the three most predictive features in the recovery model, and how were they selected?</div></div>
+  <div class="oq-item"><span class="oq-num">Q5</span><div>What broke most often, and what was the one thing everyone complained about but nobody fixed?</div></div>
+  <div class="oq-item"><span class="oq-num">Q6</span><div>Gold-mine cross-check: which parts of this architecture were the same at the gold operation, and which were different?</div></div>
+</div>
+
+<!-- ══ LEGEND ══ -->
+<div class="legend">
+  <div class="lg"><div class="lg-dot" style="background:var(--coral-bg);border-color:var(--coral-bd)"></div>OT / sensor origin</div>
+  <div class="lg"><div class="lg-dot" style="background:var(--teal-bg);border-color:var(--teal-bd)"></div>Streaming / certified output</div>
+  <div class="lg"><div class="lg-dot" style="background:var(--amber-bg);border-color:var(--amber-bd)"></div>Bronze — raw</div>
+  <div class="lg"><div class="lg-dot" style="background:var(--stone-bg);border-color:var(--stone-bd)"></div>Silver / neutral</div>
+  <div class="lg"><div class="lg-dot" style="background:var(--blue-bg);border-color:var(--blue-bd)"></div>Feature Store / DS path</div>
+  <div class="lg"><div class="lg-dot" style="background:var(--slate-bg);border-color:var(--slate-bd)"></div>AI/ML + governance</div>
+  <div class="lg"><div class="lg-dot" style="background:var(--green-bg);border-color:var(--green-bd)"></div>BI / reporting consumers</div>
+</div>
+
+<!-- ══ TRACKER ══ -->
+<div class="tracker">
+  <div class="tr-title">Validation progress</div>
+  <div class="tr-row"><span style="color:var(--st-confirm)">✓ Confirmed</span><span class="tr-count" id="cConfirm">0</span></div>
+  <div class="tr-row"><span style="color:var(--st-revise)">~ Revised</span><span class="tr-count" id="cRevise">0</span></div>
+  <div class="tr-row"><span style="color:var(--st-reject)">✗ Rejected</span><span class="tr-count" id="cReject">0</span></div>
+  <div class="tr-row" style="border-top:1px solid var(--rule);padding-top:4px;margin-top:4px"><span>Remaining</span><span class="tr-count" id="cLeft">19</span></div>
+</div>
+
+<script>
+const TOTAL = document.querySelectorAll('.val').length;
+
+function setV(btn, kind){
+  const val = btn.closest('.val');
+  const btns = val.querySelectorAll('.vb');
+  btns.forEach(b=>b.classList.remove('on-confirm','on-revise','on-reject'));
+  btn.classList.add('on-'+kind);
+  val.dataset.status = kind;
+  const note = val.querySelector('.val-note');
+  if(kind==='revise'||kind==='reject'){ note.classList.add('show'); note.focus(); }
+  else { note.classList.add('show'); }
+  updateTracker();
+}
+
+function updateTracker(){
+  let c=0,r=0,x=0;
+  document.querySelectorAll('.val').forEach(v=>{
+    if(v.dataset.status==='confirm')c++;
+    else if(v.dataset.status==='revise')r++;
+    else if(v.dataset.status==='reject')x++;
+  });
+  document.getElementById('cConfirm').textContent=c;
+  document.getElementById('cRevise').textContent=r;
+  document.getElementById('cReject').textContent=x;
+  document.getElementById('cLeft').textContent=TOTAL-c-r-x;
+}
+updateTracker();
+
+/* ══════════ PRESENTATION FEATURES ══════════ */
+
+const REDUCED=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* engineering problem definitions — auto-extracted from Section 0 so they never drift */
+const PDEFS={};
+(function(){
+  const epCard=document.querySelector('[data-name="Engineering problems"] .card-b');
+  if(!epCard)return;
+  epCard.innerHTML.split(/<br\s*\/?>/i).forEach(line=>{
+    const div=document.createElement('div');div.innerHTML=line;
+    const m=div.textContent.trim().match(/^(P\d)\s*·\s*(.+)$/s);
+    if(m)PDEFS[m[1]]=m[2].trim();
+  });
+})();
+
+/* 1 · Present / Validate mode — with entrance cascade */
+let presentMode=false;
+function toggleMode(){
+  presentMode=!presentMode;
+  document.body.classList.toggle('present',presentMode);
+  const b=document.getElementById('btnMode');
+  b.textContent=presentMode?'◉ Present':'◉ Validate';
+  b.classList.toggle('on',presentMode);
+  if(presentMode&&!REDUCED){
+    document.body.classList.add('cascading');
+    setTimeout(()=>document.body.classList.remove('cascading'),1200);
+  }
+}
+
+/* 2 · Fullscreen */
+function toggleFull(){
+  if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(()=>{});}
+  else{document.exitFullscreen();}
+}
+document.addEventListener('fullscreenchange',()=>{
+  document.getElementById('btnFull').classList.toggle('on',!!document.fullscreenElement);
+});
+
+/* 3 · Spotlight — FLIP shared-element: card grows from its slot, returns to it */
+const overlay=document.getElementById('spotOverlay');
+const spotCard=document.getElementById('spotCard');
+let spotSource=null;
+
+document.querySelectorAll('.card').forEach(c=>{
+  c.addEventListener('click',e=>{
+    if(!presentMode)return;
+    if(e.target.closest('.vb, .val-note, button, textarea'))return;
+    openSpot(c);
+  });
+});
+
+function spotTarget(){
+  const w=Math.min(860,window.innerWidth*.88);
+  const h=Math.min(window.innerHeight*.86,720);
+  return{left:(window.innerWidth-w)/2,top:(window.innerHeight-h)/2,width:w,height:h};
+}
+
+function openSpot(c){
+  spotSource=c.getBoundingClientRect();
+  const h=c.querySelector('.card-h');
+  const b=c.querySelector('.card-b');
+  const tags=[...c.querySelectorAll('.ka, .p-tag, .conf-tag')].map(t=>`<span>${t.textContent}</span>`).join('');
+  const pTags=[...c.querySelectorAll('.p-tag')].map(t=>t.textContent.trim());
+  let whyHtml='';
+  const defs=pTags.filter(p=>PDEFS[p]);
+  if(defs.length){
+    whyHtml=`<div class="spot-why"><div class="spot-why-label">Why this box exists — traces to</div>`+
+      defs.map(p=>`<div class="spot-p"><b>${p}</b><span>${PDEFS[p]}</span></div>`).join('')+`</div>`;
+  }
+  const accent=getComputedStyle(c).borderColor;
+  spotCard.style.borderTopColor=accent;
+  spotCard.innerHTML=`<div class="spot-h">${h?h.innerHTML:''}</div>
+    <div class="spot-tags">${tags}</div>
+    <div class="spot-b">${b?b.innerHTML:''}</div>
+    ${whyHtml}
+    <div class="spot-hint">click outside or press esc to return</div>`;
+
+  const t=spotTarget();
+  spotCard.style.left=t.left+'px';spotCard.style.top=t.top+'px';
+  spotCard.style.width=t.width+'px';spotCard.style.maxHeight=t.height+'px';
+
+  overlay.classList.add('open');
+  if(REDUCED){overlay.classList.add('lit');return;}
+  /* FLIP: start transformed to match source card's rect, then release to identity */
+  const sx=spotSource.width/t.width, sy=spotSource.height/t.height;
+  const dx=spotSource.left-t.left, dy=spotSource.top-t.top;
+  spotCard.style.transition='none';
+  spotCard.style.transform=`translate(${dx}px,${dy}px) scale(${sx},${sy})`;
+  spotCard.style.opacity='.4';
+  spotCard.getBoundingClientRect(); /* force reflow */
+  spotCard.style.transition='';
+  spotCard.style.transform='none';
+  spotCard.style.opacity='1';
+  overlay.classList.add('lit');
+}
+
+function closeSpot(e){
+  if(e&&e.target.closest('.spot-card'))return;
+  if(!overlay.classList.contains('open'))return;
+  overlay.classList.remove('lit');
+  if(REDUCED||!spotSource){overlay.classList.remove('open');return;}
+  const t=spotTarget();
+  const sx=spotSource.width/t.width, sy=spotSource.height/t.height;
+  const dx=spotSource.left-t.left, dy=spotSource.top-t.top;
+  spotCard.style.transform=`translate(${dx}px,${dy}px) scale(${sx},${sy})`;
+  spotCard.style.opacity='.3';
+  setTimeout(()=>{
+    overlay.classList.remove('open');
+    spotCard.style.transition='none';
+    spotCard.style.transform='none';spotCard.style.opacity='1';
+    spotCard.getBoundingClientRect();
+    spotCard.style.transition='';
+  },430);
+}
+
+/* 4 · Layer walkthrough — arrow keys + progress rail */
+let walkMode=false,walkIdx=0;
+const walkLayers=[...document.querySelectorAll('.layer')];
+function toggleWalk(){
+  walkMode=!walkMode;
+  document.body.classList.toggle('walk',walkMode);
+  document.getElementById('btnWalk').classList.toggle('on',walkMode);
+  if(walkMode){walkIdx=0;walkGo();}
+  else{walkLayers.forEach(l=>l.classList.remove('walk-active'));document.getElementById('walkRail').style.width='0';}
+}
+function walkGo(){
+  walkLayers.forEach((l,i)=>l.classList.toggle('walk-active',i===walkIdx));
+  const lbl=walkLayers[walkIdx].querySelector('.layer-label span');
+  document.getElementById('walkPos').textContent=`${walkIdx+1} / ${walkLayers.length} — ${lbl?lbl.textContent:''}  (← → to step, esc to exit)`;
+  document.getElementById('walkRail').style.width=((walkIdx+1)/walkLayers.length*100)+'%';
+  walkLayers[walkIdx].scrollIntoView({behavior:REDUCED?'auto':'smooth',block:'center'});
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(overlay.classList.contains('open')){closeSpot();return;}
+    if(walkMode){toggleWalk();return;}
+  }
+  if(!walkMode)return;
+  if(e.target.matches('textarea,input'))return;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();if(walkIdx<walkLayers.length-1){walkIdx++;walkGo();}}
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();if(walkIdx>0){walkIdx--;walkGo();}}
+});
+
+/* 5 · Tag filters — with match count */
+let activeFilter=null;
+function toggleFilter(btn){
+  const f=btn.dataset.f;
+  const cnt=document.getElementById('fCount');
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('f-hit'));
+  if(activeFilter===f){activeFilter=null;document.body.classList.remove('f-dim');cnt.classList.remove('show');return;}
+  activeFilter=f;btn.classList.add('on');
+  document.body.classList.add('f-dim');
+  let n=0;
+  document.querySelectorAll('.card').forEach(c=>{
+    if(c.querySelector('.'+f)){c.classList.add('f-hit');n++;}
+  });
+  cnt.textContent=n+' components';cnt.classList.add('show');
+}
+</script>
+
+</body>
+</html>
